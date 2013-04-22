@@ -1,0 +1,144 @@
+
+<!-- saved from url=(0116)https://blackboard.case.edu/bbcswebdav/pid-914247-dt-content-rid-1855065_1/courses/eecs345_hsc21_1/part5%281%29.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>EECS 345: Interpreter Project, Part 5</title>
+</head>
+
+<body>
+<h2>EECS 345: Programming Language Concepts</h2>
+<h2>Interpreter Project, Part 5</h2>
+<h3>Due Monday, April 29</h3>
+
+<p><em>For this and all Interpreter Project's, you are strongly encouraged, but not required, to work in a team of two.  
+You will be building off of the interpreter you wrote for part 4.  As a result, it is expected that you keep the same teams
+that you used for part 4.  If you need to change your team, please speak to the course instructor.</em></p>
+
+<p>In this homework, you will expand on the interpreter of part 4 by adding objects (instances of classes), and the ability
+to throw and catch exceptions. </p>
+
+<p><strong>Details from pervious parts that must be maintained:</strong><br>
+&nbsp;&nbsp;<em>For pairs:</em>  all variables may now store either integers or objects.  Likewise, functions may now return integers or
+objects (or they may not return a value).  Functions must be able to modify class and instance fields as well as call other 
+functions.  All functions are call-by-value (with object parameters, if you pass the object itself and you are using boxes for your environment, 
+you will get the same behavior as with normal Java).<br>
+&nbsp;&nbsp;<em>For teams:</em>  all variables may now store integers, booleans, or objects.  Likewkse, functions may now return integers, booleans,
+or objects (or they may not return a value).  Functions must be able to modify clas and instance fields as well as call other functions.
+Function parameters can be either call-by-value or call-by-reference.  The assignment operator returns a value.  Function overloading is permitted.</p>
+
+<p>An example program is as follows:
+</p><pre>class A {
+  var x = 6;
+  var y = 7;
+
+  prod() {
+    return this.x * this.y;
+  }
+
+  set2(a, b) {
+    x = a;
+    y = b;
+  }
+}
+
+class B extends A {
+  set1(a) {
+    set2(a, a);
+  }
+
+  static main () {
+    var b = new B();
+    b.set1(10);
+    return b.prod();
+  }
+}
+</pre>
+
+Your interpreter should now take two parameters, a <em>file</em> and a <em>classname</em>.  For example,
+<tt>(interpret "MyProgram.j" "B")</tt>, where <em>file</em> is the name of the file to be interpreted, and <em>classname</em>
+is the name of the class whose main method you are to run.  The function should call <tt>parser</tt> on the file
+<em>file</em>, and then lookup <tt>(string-&gt;symbol <em>classname</em>)</tt> in the environment to get the desired
+class, and then lookup the <tt>main</tt> method of this class.
+The final value returned by your interpreter should be whatever is returned by <tt>main</tt>.<p></p>
+
+<h4>Details</h4>
+
+<p>
+</p><ol><li>Note that we now allow the object type in our language.  So, objects can be assigned to variables,
+passed as parameters, and returned from functions.</li>
+<li>All mathematical and comparison operators should only be implemented for integers (or booleans).</li>
+<li>The only operator that will work on objects is the <tt>dot</tt> operator.</li>
+<li>The <tt>new</tt> operator will return an object of the desired class.</li>
+<li>The <tt>new</tt> operator can only be used in expressions, not as the start of a statement.</li>
+<li>Variables and methods can now be static (class) or non-static (instance).</li>
+<li>The <tt>main</tt> method should be static.</li>
+<li>The language supports use of <tt>this</tt> and <tt>super</tt> object references.</li>
+<li>The top level of the program is only class definitions.</li>
+<li>Each class definition consists of assignment statements and method definitions.</li>
+<li>Nested uses of the <tt>dot</tt> operator are allowed.</li>
+<li>The language supports <tt>try</tt>, <tt>catch</tt>, and <tt>finally</tt> blocks, and the <tt>throw</tt> statement.</li></ol><p></p>
+
+
+<h4>Parser Constructs</h4>
+
+<p>
+</p><pre>class A {              =&gt;   (class A () <em>body</em>)
+  <em>body</em>
+
+class B extends A {    =&gt;   (class B (extends A)  <em>body</em>)
+  <em>body</em>
+
+static x = 5;          =&gt;   (static-= x 5)
+
+static main() {        =&gt;   (static-function main () <em>body</em>)
+  <em>body</em>
+
+new A()                =&gt;   (new A)
+
+a.x                    =&gt;   (dot a x)
+
+new A().f(3,5)         =&gt;   (funcall (dot (new A) f) 3 5)
+
+throw e;               =&gt;   (throw e)
+
+try {                  =&gt;   (try <em>body</em> (catch (e) <em>body</em>) (finally <em>body</em>))
+  <em>body</em>
+}
+catch (e) {
+  <em>body</em>
+}
+finally {
+  <em>body</em>
+}
+</pre>
+Note that either the finally or the catch block may be empty:
+<pre>try {                 =&gt;  (try <em>body</em> (catch (e) <em>body</em>) ())
+  <em>body</em>
+}
+catch (e) {
+  body
+}
+</pre>
+As there are no types, only one catch statement per try block is allowed.
+<p></p>
+
+<h4>Basic Task</h4>
+<p><strong>Step 1:</strong> Write an interpreter that correctly handles objects and classes.  You should be able to create
+objects (using a generic constructor), set values, call methods, and use values <tt>this</tt> and <tt>super</tt>.
+Solo programmers do not have
+to support user defined constructors.  Step 1 correctness will be the majority of your interpreter grade.</p>
+
+<p><strong>Step 2:</strong> Add the ability to throw and catch exceptions.  You will need to add a <tt>throw</tt> continuation to
+your interpret routines.</p>
+
+<h4>For Teams:</h4>
+
+<p>Add user-defined constructors.  The constructor should be a method with the same name as the class, and it should be called by the
+new operator.  You should support constructor overloading, and you should support the class hierarchy by having the constructors
+for a class call the constructor for the super class using the <tt>super</tt> function call (or automatically if no <tt>super()</tt> is 
+present).  If no constructor has been created, allow for a generic constructor.  As a hint, make the constructor list be a separate environment
+of the class from the method environment.  That way constructors will not be inherited.</p>
+
+
+
+
+</body></html>
