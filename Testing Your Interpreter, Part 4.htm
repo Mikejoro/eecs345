@@ -1,0 +1,277 @@
+
+<!-- saved from url=(0120)https://blackboard.case.edu/bbcswebdav/pid-914247-dt-content-rid-1871121_1/courses/eecs345_hsc21_1/part4test%281%29.html -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Testing Your Interpreter, Part 4</title>
+</head>
+
+<body>
+<h3>Testing Your Interpreter, Part 4</h3>
+
+<p>Here are some tests you can use to track down errors in your interpreter as you work on coding part 5.</p><p>
+
+</p><h4>Basic Tests for All Groups</h4>
+
+<p>Test 1: This code should return 10.
+</p><pre>class A {
+  static main() {
+    return 10;
+  }
+}
+</pre><p></p>
+
+
+<p>Test 2: This code should return 20.
+</p><pre>class A {
+  static var x = 20;
+  static main() {
+    return x;
+  }
+}
+
+</pre>
+<p></p>
+
+<p>Test 3: This code should return 30.
+</p><pre>class A {
+  static var x = 30;
+  static main() {
+    return A.x;
+  }
+}
+
+</pre><p></p>
+
+<p>Test 4: This code should return 30.
+</p><pre>class A {
+  static var x = 10;
+  static var y = 20;
+
+  static add(a, b) {
+    return a + b;
+  }
+
+  static main() {
+    return A.add(A.x, y);
+  }
+}
+</pre><p></p>
+
+
+<p>Test 5: This code should return 30 when running A's main, but 510 when running B's main.
+</p><pre>class A {
+  static var x = 10;
+  static var y = 20;
+
+  static add(a, b) {
+    return a + b;
+  }
+
+  static main() {
+    return A.add(A.x, y);
+  }
+}
+
+class B extends A {
+  static var y = 200;
+  static var z = 300;
+
+  static main() {
+    return add(x+y,z);
+  }
+}
+</pre><p></p>
+
+<p>Test 6: This code should return 30 when running A's main and 530 when running B's main.
+</p><pre>class A {
+  static var x = 10;
+  static var y = 20;
+
+  static add(a, b) {
+    return a + b;
+  }
+
+  static main() {
+    return A.add(A.x, y);
+  }
+}
+
+class B extends A {
+  static var y = 200;
+  static var z = 300;
+
+  static main() {
+    return add(x+y,super.y + z);
+  }
+}
+</pre><p></p>
+
+<p>Test 7: This code should return 105 when running A's main and 1155 when running B's main.
+</p><pre>class A {
+  static var x = 49*5*9;
+  static var y = 7*25*3;
+
+  static gcd(a,b) {
+    if (a &lt; b) {
+      var temp = a;
+      a = b;
+      b = temp;
+    }
+    var r = a % b;
+    while (r != 0) {
+      a = b;
+      b = r;
+      r = a % b;
+    }
+    return b;
+  }
+
+  static main() {
+    return gcd(x, y);
+  }
+}
+
+class B extends A {
+  static var y = super.y * 121;
+  static var x = super.x * 11;
+
+  static main() {
+    return gcd(x,y);
+  }
+}
+</pre>
+<p></p>
+
+<p>Test 8: This code should return 615.
+</p><pre>class A {
+  static var a = 1;
+  static var b = 10;
+
+  static setA(x) {
+    a = x;
+  }
+
+  static getSum() {
+    return a + b;
+  }
+}
+
+class B {
+  static main() {
+    A.setA(5);
+
+    return A.getSum() + C.x + C.timesX(A.a);
+  }
+}
+
+class C {
+  static var x = 100;
+  static timesX(a) {
+    return a * x;
+  }
+}
+</pre><p></p>
+
+<p>Test 9: This code should give an error when running B's main and return 4321 when running C's main.
+</p><pre>class A {
+  static var a = 1;
+  static var b = 20;
+}
+
+class B extends A {
+  static var c = 300;
+
+  static main() {
+    return a + b + c + d;
+  }
+}
+
+class C extends B {
+  static var d = 4000;
+
+  static main() {
+    return a + b + c + d;
+  }
+}
+</pre><p></p>
+
+<p>Test 10: This code should return 400 when running Square's main.
+</p><pre>class Rectangle {
+  static var width = 10;
+  static var height = 12;
+
+  static area() {
+    var a = width * height;
+    return a;
+  }
+
+  static setSize(x, y) {
+    width = x;
+    height = y;
+  }
+}
+
+class Square extends Rectangle {
+  static setSize(x) {
+    super.setSize(x, x);
+  }
+
+  static main() {
+    setSize(20);
+    return area();
+  }
+}
+
+</pre><p></p>
+
+<h4> Additional Tests for Team Interpreters (method overloading)</h4>
+
+<p>Test 11: This code should return 530.
+</p><pre>class A {
+  static var x = 10;
+  static var y = 20;
+
+  static add(a, b) {
+    return a + b;
+  }
+
+  static add(a,b,c) {
+    return a + b + c;
+  }
+
+  static main() {
+    return A.add(x, y) + A.add(x, y, y) * 10;
+  }
+}
+</pre><p></p>
+
+<p>Test 12: This code should return 66.
+</p><pre>class A {
+  static var x = 10;
+  static var y = 20;
+
+  static add(a, b) {
+    return a + b;
+  }
+
+  static add(a,b,c) {
+    return a + b + c;
+  }
+}
+
+class B extends A {
+  static var x = 2;
+  static var y = 30;
+
+  static add(a,b) {
+    return a*b;
+  }
+
+  static main() {
+    return add(x,y) + add(x,x,x);
+  }
+}
+</pre><p></p>
+
+
+
+</body></html>
