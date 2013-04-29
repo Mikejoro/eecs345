@@ -31,14 +31,14 @@
 ; ================================
 ; Entry Point
 
-(load "functionParser.scm")
+(load "classParser.scm")
 
 (define interpret (lambda (file class)
     (call/cc (lambda (return)
         (eval-exp
             (append (parser file) (list
-               (list 'return (list 'funcall 'main))
-;               (list 'return (list 'funcall (list 'dot (string->symbol class) 'main)))
+;               (list 'return (list 'funcall 'main))
+               (list 'return (list 'funcall (list 'dot (string->symbol class) 'main)))
             ))
             the-global-env
             (make-k
@@ -95,6 +95,7 @@
 
 (define var? (lambda (exp) (symbol? exp)))
 (define var-define? (lambda (exp) (tagged-list? exp 'var)))
+(define var-define-static? (lambda (exp) (tagged-list? exp 'static-var)))
 (define var-assign? (lambda (exp) (tagged-list? exp '=)))
 
 (define env-loop (lambda (var val env none-cb match-cb)
@@ -325,6 +326,7 @@
         ((self-eval? exp) exp)
         ((var? exp) (get-var exp env))
         ((var-define? exp) (eval-var-define exp env k))
+        ((var-define-static? exp) (eval-var-define-static exp env k))
         ((var-assign? exp) (eval-var-assign exp env k))
         ((return? exp) (eval-return exp env k))
         ((break? exp) (eval-break exp env k))
@@ -333,8 +335,10 @@
         ((conditional? exp) (eval-conditional exp env k))
         ((while? exp) (eval-while exp env k))
         ((method-define? exp) (eval-method-define exp env k))
+        ((method-define-static? exp) (eval-method-define-static exp env k))
         ((method-call? exp) (eval-method-call exp env k))
-        ;[todo] ...
+        ((class-define? exp) (eval-class-define exp env k))
+        ((dot? exp) (eval-dot exp env k))
         ((sequence? exp) (eval-seq exp env k))
         ((statement? exp) (eval-statement exp env k))
         (else (error "EVAL: Unknown expression:" exp))
@@ -371,6 +375,10 @@
         )
         (eval-exp (definition-val exp) env k)
     )
+))
+
+(define eval-var-define-static (lambda (exp env k)
+    ;[todo]
 ))
 
 (define eval-var-assign (lambda (exp env k)
@@ -460,6 +468,7 @@
 ; Method Definition
 
 (define method-define? (lambda (exp) (tagged-list? exp 'function)))
+(define method-define-static? (lambda (exp) (tagged-list? exp 'static-function)))
 (define method-name (lambda (exp) (cadr exp)))
 (define method-params (lambda (exp) (caddr exp)))
 (define method-body (lambda (exp) (cadddr exp)))
@@ -472,6 +481,10 @@
             env
         )
     env)
+))
+
+(define eval-method-define-static (lambda (exp env k)
+    ;[todo]
 ))
 
 ; ================================
@@ -516,6 +529,31 @@
             (method-args exp)
         )
     ))
+))
+
+; ================================
+; Class Definition
+
+(define make-class (lambda (name extend body) (list 'class name extend body)))
+(define class-define? (lambda (exp) (tagged-list? exp 'class)))
+(define class-name (lambda (exp) (cadr exp)))
+(define class-extend (lambda (exp) (caddr exp)))
+(define class-body (lambda (exp) (cadddr exp)))
+
+(define eval-class-define (lambda (exp env k)
+    ;[todo] dump static fields/methods into env named as dot expressions?
+))
+
+; ================================
+; Dot Expression
+
+(define make-dot (lambda (left right) (list 'dot left right)))
+(define dot? (lambda (dot) (tagged-list? dot 'dot)))
+(define dot-left (lambda (dot) (cadr dot)))
+(define dot-right (lambda (dot) (caddr dot)))
+
+(define eval-dot (lambda (exp env k)
+    ;[todo]
 ))
 
 ; ================================
