@@ -1,9 +1,13 @@
 ; ================================
 ; Author: Sean Fox (saf66)
-; To run: (interpret "filename" "Class")
+; To run: (interpret "filename")
 ; Notes:
 ;     I'm using DrRacket with #lang set to R5RS.
+;     It should pass all tests except for call-by-reference, which is not implemented.
 ; ================================
+
+; ================================
+; Helper Functions
 
 ; throw an error
 (define (error reason . args)
@@ -31,13 +35,13 @@
 ; ================================
 ; Entry Point
 
-(load "classParser.scm")
+(load "functionParser.scm")
 
-(define interpret (lambda (file class)
+(define interpret (lambda (file)
     (call/cc (lambda (return)
         (eval-exp
             (append (parser file) (list
-               (list 'return (list 'funcall (list 'dot (string->symbol class) 'main)))
+               (list 'return (list 'funcall 'main))
             ))
             the-global-env
             return
@@ -501,58 +505,4 @@
 ))
 
 ; ================================
-;
 
-
-
-; ================================
-;
-
-
-
-; ================================
-;
-
-
-
-; ================================
-;
-
-
-
-; ================================
-;
-
-
-
-; ================================
-;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-; ================================
-
-(display (parser "test.txt"))
-(newline)
-(display (interpret "test.txt" "A"))
