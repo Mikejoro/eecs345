@@ -31,21 +31,35 @@
 ; ================================
 ; Entry Point
 
-(load "classParser.scm")
+(load "functionParser.scm")
 
 (define interpret (lambda (file class)
     (call/cc (lambda (return)
         (eval-exp
             (append (parser file) (list
-               (list 'return (list 'funcall (list 'dot (string->symbol class) 'main)))
+               (list 'return (list 'funcall 'main))
+;               (list 'return (list 'funcall (list 'dot (string->symbol class) 'main)))
             ))
             the-global-env
-            return
-            (lambda () (error "BREAK: Break called outside a loop!"))
-            (lambda () (error "CONTINUE: Continue called outside a loop!"))
+            (make-k
+                return
+                (lambda () (error "BREAK: Break called outside a loop!"))
+                (lambda () (error "CONTINUE: Continue called outside a loop!"))
+            )
         )
     ))
 ))
+
+; ================================
+; Continuation
+
+(define make-k (lambda (return break continue) (list return break continue)))
+(define get-return (lambda (k) (car k)))
+(define get-break (lambda (k) (cadr k)))
+(define get-continue (lambda (k) (caddr k)))
+(define set-return (lambda (k return) (make-k return (get-break k) (get-continue k))))
+(define set-break (lambda (k break) (make-k (get-return k) break (get-continue k))))
+(define set-continue (lambda (k continue) (make-k (get-return k) (get-break k) continue)))
 
 ; ================================
 ; Environment
@@ -241,14 +255,14 @@
 (define operator (lambda (exp) (car exp)))
 (define operands (lambda (exp) (cdr exp)))
 
-(define eval-operands (lambda (ops env return break continue)
-    (map (lambda (exp) (eval-exp exp env return break continue)) ops)
+(define eval-operands (lambda (ops env k)
+    (map (lambda (exp) (eval-exp exp env k)) ops)
 ))
-(define eval-statement (lambda (exp env return break continue)
+(define eval-statement (lambda (exp env k)
     (apply-proc
-        (eval-exp (operator exp) env return break continue)
-        (eval-operands (operands exp) env return break continue)
-        return break continue
+        (eval-exp (operator exp) env k)
+        (eval-operands (operands exp) env k)
+        k
     )
 ))
 
@@ -265,12 +279,12 @@
 (define first-exp (lambda (seq) (car seq)))
 (define rest-exps (lambda (seq) (cdr seq)))
 
-(define eval-seq (lambda (seq env return break continue)
+(define eval-seq (lambda (seq env k)
     (cond
-        ((last-exp? seq) (eval-exp (first-exp seq) env return break continue))
+        ((last-exp? seq) (eval-exp (first-exp seq) env k))
         (else
-            (eval-exp (first-exp seq) env return break continue)
-            (eval-seq (rest-exps seq) env return break continue)
+            (eval-exp (first-exp seq) env k)
+            (eval-seq (rest-exps seq) env k)
         )
     )
 ))
@@ -284,7 +298,7 @@
 (define proc-body (lambda (proc) (caddr proc)))
 (define proc-env (lambda (proc) (cadddr proc)))
 
-(define apply-proc (lambda (proc args return break continue)
+(define apply-proc (lambda (proc args k)
     (cond
         ((self-eval? proc) proc)
         ((prim? proc) (apply-prim proc args))
@@ -296,7 +310,7 @@
                     args
                     (proc-env proc)
                 )
-                return break continue
+                k
             )
         )
         (else (error "APPLY: Unknown procedure:" proc))
@@ -306,23 +320,23 @@
 ; ================================
 ; Expression
 
-(define eval-exp (lambda (exp env return break continue)
+(define eval-exp (lambda (exp env k)
     (cond
         ((self-eval? exp) exp)
         ((var? exp) (get-var exp env))
-        ((var-define? exp) (eval-var-define exp env return break continue))
-        ((var-assign? exp) (eval-var-assign exp env return break continue))
-        ((return? exp) (eval-return exp env return break continue))
-        ((break? exp) (break))
-        ((continue? exp) (continue))
-        ((block? exp) (eval-block exp env return break continue))
-        ((conditional? exp) (eval-conditional exp env return break continue))
-        ((while? exp) (eval-while exp env return break continue))
-        ((method-define? exp) (eval-method-define exp env return break continue))
-        ((method-call? exp) (eval-method-call exp env return break continue))
+        ((var-define? exp) (eval-var-define exp env k))
+        ((var-assign? exp) (eval-var-assign exp env k))
+        ((return? exp) (eval-return exp env k))
+        ((break? exp) (eval-break exp env k))
+        ((continue? exp) (eval-continue exp env k))
+        ((block? exp) (eval-block exp env k))
+        ((conditional? exp) (eval-conditional exp env k))
+        ((while? exp) (eval-while exp env k))
+        ((method-define? exp) (eval-method-define exp env k))
+        ((method-call? exp) (eval-method-call exp env k))
         ;[todo] ...
-        ((sequence? exp) (eval-seq exp env return break continue))
-        ((statement? exp) (eval-statement exp env return break continue))
+        ((sequence? exp) (eval-seq exp env k))
+        ((statement? exp) (eval-statement exp env k))
         (else (error "EVAL: Unknown expression:" exp))
     )
 ))
@@ -349,23 +363,23 @@
 (define assignment-var (lambda (exp) (cadr exp)))
 (define assignment-val (lambda (exp) (caddr exp)))
 
-(define eval-var-define (lambda (exp env return break continue)
+(define eval-var-define (lambda (exp env k)
     (
         (lambda (val)
             (new-var! (definition-var exp) val env)
             val
         )
-        (eval-exp (definition-val exp) env return break continue)
+        (eval-exp (definition-val exp) env k)
     )
 ))
 
-(define eval-var-assign (lambda (exp env return break continue)
+(define eval-var-assign (lambda (exp env k)
     (
         (lambda (val)
             (set-var! (assignment-var exp) val env)
             val
         )
-        (eval-exp (assignment-val exp) env return break continue)
+        (eval-exp (assignment-val exp) env k)
     )
 ))
 
@@ -375,15 +389,18 @@
 (define return? (lambda (exp) (tagged-list? exp 'return)))
 (define return-val (lambda (exp) (cadr exp)))
 
-(define eval-return (lambda (exp env return break continue)
-    (return (eval-exp (return-val exp) env return break continue))
+(define eval-return (lambda (exp env k)
+    ((get-return k) (eval-exp (return-val exp) env k))
 ))
 
 ; ================================
 ; Control Flow
 
 (define break? (lambda (exp) (tagged-list? exp 'break)))
+(define eval-break (lambda (exp env k) ((get-break k))))
+
 (define continue? (lambda (exp) (tagged-list? exp 'continue)))
+(define eval-continue (lambda (exp env k) ((get-continue k))))
 
 ; ================================
 ; Block
@@ -391,8 +408,8 @@
 (define block? (lambda (exp) (tagged-list? exp 'begin)))
 (define block-inner (lambda (exp) (cdr exp)))
 
-(define eval-block (lambda (exp env return break continue)
-    (eval-exp (block-inner exp) (new-frame env) return break continue)
+(define eval-block (lambda (exp env k)
+    (eval-exp (block-inner exp) (new-frame env) k)
 ))
 
 ; ================================
@@ -408,10 +425,10 @@
     )
 ))
 
-(define eval-conditional (lambda (exp env return break continue)
-    (if (true? (eval-exp (conditional-predicate exp) env return break continue))
-        (eval-exp (conditional-consequent exp) (new-frame env) return break continue)
-        (eval-exp (conditional-alternative exp) (new-frame env) return break continue)
+(define eval-conditional (lambda (exp env k)
+    (if (true? (eval-exp (conditional-predicate exp) env k))
+        (eval-exp (conditional-consequent exp) (new-frame env) k)
+        (eval-exp (conditional-alternative exp) (new-frame env) k)
     )
 ))
 
@@ -422,20 +439,20 @@
 (define while-condition (lambda (exp) (cadr exp)))
 (define while-body (lambda (exp) (caddr exp)))
 
-(define eval-while (lambda (exp env return break continue)
-    (define eval-while-inner (lambda (exp env return break continue)
+(define eval-while (lambda (exp env k)
+    (define eval-while-inner (lambda (exp env k)
         (cond
-            ((true? (eval-exp (while-condition exp) env return break continue))
+            ((true? (eval-exp (while-condition exp) env k))
                 (call/cc (lambda (continue)
-                    (eval-exp (while-body exp) env return break continue)
+                    (eval-exp (while-body exp) env (set-continue k continue))
                 ))
-                (eval-while-inner exp env return break continue)
+                (eval-while-inner exp env k)
             )
             (else 'nop)
         )
     ))
     (call/cc (lambda (break)
-        (eval-while-inner exp (new-frame env) return break continue)
+        (eval-while-inner exp (new-frame env) (set-break k break))
     ))
 ))
 
@@ -447,7 +464,7 @@
 (define method-params (lambda (exp) (caddr exp)))
 (define method-body (lambda (exp) (cadddr exp)))
 
-(define eval-method-define (lambda (exp env return break continue)
+(define eval-method-define (lambda (exp env k)
     (new-var! (method-name exp)
         (make-proc
             (method-params exp)
@@ -463,7 +480,7 @@
 (define method-call? (lambda (exp) (tagged-list? exp 'funcall)))
 (define method-args (lambda (exp) (cddr exp)))
 
-(define eval-method-call (lambda (exp env return break continue)
+(define eval-method-call (lambda (exp env k)
     (define update-proc-env (lambda (var env proc)
         (make-proc
             (proc-params proc)
@@ -473,15 +490,15 @@
     ))
     (call/cc (lambda (return)
         (
-            (lambda (name args)
+            (lambda (k name args)
                 (if (var-exist? name env)
                     (
                         (lambda (proc)
                             (if (= (length (proc-params proc)) (length args))
                                 (apply-proc
                                     (update-proc-env name env proc)
-                                    (eval-operands args env return break continue)
-                                    return break continue
+                                    (eval-operands args env k)
+                                    k
                                 )
                                 (error
                                     "CALL: Mismatched parameters and arguments:" name (proc-params proc)
@@ -494,6 +511,7 @@
                     (error "CALL: Unknown method:" name)
                 )
             )
+            (set-return k return)
             (method-name exp)
             (method-args exp)
         )
