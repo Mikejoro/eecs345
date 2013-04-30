@@ -31,7 +31,7 @@
 ; returns the nth element of the given list (zero-based)
 (define index (lambda (l n)
     (cond
-        ((null? l) (list))
+        ((null? l) 'nop)
         ((= 0 n) (car l))
         (else (index (cdr l) (- n 1)))
     )
@@ -334,7 +334,7 @@
 (define eval-exp (lambda (exp env k)
     (cond
         ((self-eval? exp) exp)
-        ((var? exp) (get-var exp env))
+        ((var? exp) (eval-get-var exp env k))
         ((var-define? exp) (eval-var-define exp env k))
         ((var-define-static? exp) (eval-var-define-static exp env k))
         ((var-assign? exp) (eval-var-assign exp env k))
@@ -361,6 +361,15 @@
         (boolean? exp)
         (eq? 'nop exp)
         #f
+    )
+))
+
+(define eval-get-var (lambda (name env k)
+    (display name)
+    (newline)
+    (if (var-exist? name env)
+        (get-var name env)
+        (eval-dot (make-dot 'this name) env k)
     )
 ))
 
@@ -507,24 +516,24 @@
 (define method-args (lambda (exp) (cddr exp)))
 
 (define eval-method-call (lambda (exp env k)
-    (define call-method (lambda (name proc args env k)
-        (if (= (length (proc-params proc)) (length args))
-            (apply-proc proc (eval-operands args env k) k)
-            (error
-                "CALL: Mismatched parameters and arguments:" name (proc-params proc)
-                'expected (length (proc-params proc)) 'got (length args)
-            )
-        )
-    ))
     (call/cc (lambda (return)
         (
             (lambda (name args k)
                 (
-                    (lambda (name proc)
-                        (call-method name proc args (proc-env proc) k)
+                    (lambda (proc name)
+                        (if (= (length (proc-params proc)) (length args))
+                            (apply-proc proc (eval-operands args env k) k)
+                            (error
+                                "CALL: Mismatched parameters and arguments:" name (proc-params proc)
+                                'expected (length (proc-params proc)) 'got (length args)
+                            )
+                        )
                     )
-                    (if (dot? name) (dot-right name) name)
                     (eval-exp name env k)
+                    (if (dot? name)
+                        (dot-right name)
+                        name
+                    )
                 )
             )
             (method-name exp)
@@ -574,18 +583,22 @@
         (lambda (left right)
             (
                 (lambda (class)
-                    ;[todo] search class-env for left-hand side, recurse to parent if not exist
                     (
                         (lambda (parent obj-env)
-                            (eval-exp right obj-env k)
+                            (if (var-exist? right obj-env)
+                                (eval-exp right obj-env k)
+                                (eval-dot (make-dot parent right) obj-env k)
+                            )
                         )
                         (class-extend class)
                         (class-env class)
                     )
                 )
                 (cond
+                    ((null? left) (error "DOT: Reference not found:" right))
                     ((eq? 'super left) (eval-exp (eval-exp left env k) env k))
-                    ((eq? 'this left) (error "DOT: Unimplemented:" left))
+                    ;[todo] how to handle instances?
+                    ((eq? 'this left) (eval-exp (eval-exp 'class env k) env k))
                     (else (eval-exp left env k))
                 )
             )

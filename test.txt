@@ -1,21 +1,27 @@
 class A {
-  static var x = 10;
-  static var y = 20;
+  static var a = 1;
+  static var b = 10;
 
-  static add(a, b) {
-    return a + b;
+  static setA(x) {
+    a = x;
   }
 
-  static main() {
-    return A.add(A.x, y);
+  static getSum() {
+    return a + b;
   }
 }
 
-class B extends A {
-  static var y = 200;
-  static var z = 300;
-
+class B {
   static main() {
-    return add(x+y,z);
+    A.setA(5);
+
+    return A.getSum() + C.x + C.timesX(A.a);
+  }
+}
+
+class C {
+  static var x = 100;
+  static timesX(a) {
+    return a * x;
   }
 }
