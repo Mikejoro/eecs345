@@ -106,9 +106,6 @@
 ; Variable
 
 (define var? (lambda (exp) (symbol? exp)))
-(define var-define? (lambda (exp) (tagged-list? exp 'var)))
-(define var-define-static? (lambda (exp) (tagged-list? exp 'static-var)))
-(define var-assign? (lambda (exp) (tagged-list? exp '=)))
 
 (define env-loop (lambda (var val env none-cb match-cb)
     (define scan (lambda (vars vals)
@@ -371,15 +368,11 @@
 ; ================================
 ; Variable Definition
 
+
+(define var-define? (lambda (exp) (tagged-list? exp 'var)))
+(define var-define-static? (lambda (exp) (tagged-list? exp 'static-var)))
 (define definition-var (lambda (exp) (index exp 1)))
 (define definition-val (lambda (exp) (index exp 2)))
-;    (if (null? (cddr exp))
-;        'nop
-;        (caddr exp)
-;    )
-;))
-(define assignment-var (lambda (exp) (index exp 1)))
-(define assignment-val (lambda (exp) (index exp 2)))
 
 (define eval-var-define (lambda (exp env k)
     (
@@ -395,6 +388,13 @@
     ;[todo]
     (eval-var-define exp env k)
 ))
+
+; ================================
+; Variable Assignment
+
+(define var-assign? (lambda (exp) (tagged-list? exp '=)))
+(define assignment-var (lambda (exp) (index exp 1)))
+(define assignment-val (lambda (exp) (index exp 2)))
 
 (define eval-var-assign (lambda (exp env k)
     (
@@ -417,10 +417,13 @@
 ))
 
 ; ================================
-; Control Flow
+; Break
 
 (define break? (lambda (exp) (tagged-list? exp 'break)))
 (define eval-break (lambda (exp env k) ((get-break k))))
+
+; ================================
+; Continue
 
 (define continue? (lambda (exp) (tagged-list? exp 'continue)))
 (define eval-continue (lambda (exp env k) ((get-continue k))))
@@ -442,11 +445,6 @@
 (define cond-predicate (lambda (exp) (index exp 1)))
 (define cond-consequent (lambda (exp) (index exp 2)))
 (define cond-alternative (lambda (exp) (index exp 3)))
-;    (if (null? (cdddr exp))
-;        'nop
-;        (cadddr exp)
-;    )
-;))
 
 (define eval-cond (lambda (exp env k)
     (if (true? (eval-exp (cond-predicate exp) env k))
@@ -524,13 +522,14 @@
             (lambda (name args env k)
                 (
                     (lambda (name proc)
-                        (call-method name
-                            (make-proc
-                                (proc-params proc)
-                                (proc-body proc)
-                                (copy-vars! (list name) env (new-frame (proc-env proc)))
-                            )
-                        args env k)
+;                        (call-method name
+;                            (make-proc
+;                                (proc-params proc)
+;                                (proc-body proc)
+;                                (copy-vars! (list name) env (new-frame (proc-env proc)))
+;                            )
+;                        args env k)
+                         (call-method name proc args env k)
                     )
                     (if (dot? name) (dot-right name) name)
                     (eval-exp name env k)
