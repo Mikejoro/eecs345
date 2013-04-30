@@ -241,7 +241,6 @@
         (lambda (env)
             (new-var! 'true #t env)
             (new-var! 'false #f env)
-            (new-var! 'class (list) env)
             env
         )
         (extend-env
@@ -519,17 +518,10 @@
     ))
     (call/cc (lambda (return)
         (
-            (lambda (name args env k)
+            (lambda (name args k)
                 (
                     (lambda (name proc)
-;                        (call-method name
-;                            (make-proc
-;                                (proc-params proc)
-;                                (proc-body proc)
-;                                (copy-vars! (list name) env (new-frame (proc-env proc)))
-;                            )
-;                        args env k)
-                         (call-method name proc args env k)
+                        (call-method name proc args (proc-env proc) k)
                     )
                     (if (dot? name) (dot-right name) name)
                     (eval-exp name env k)
@@ -537,7 +529,6 @@
             )
             (method-name exp)
             (method-args exp)
-            (new-frame env)
             (set-return k return)
         )
     ))
@@ -554,9 +545,42 @@
 (define class-env (lambda (exp) (index exp 4)))
 
 (define eval-class-def (lambda (exp env k)
+    (define list-parents (lambda (parent l env k)
+        (if (null? parent)
+            l
+            (
+                (lambda (class l)
+                    (list-parents (class-extend class) l (class-env class) k)
+                )
+                (eval-exp parent env k)
+                (cons parent l)
+            )
+        )
+    ))
+    (define load-parents (lambda (parents target-env lookup-env k)
+        (if (null? parents)
+            target-env
+            (
+                (lambda (class)
+                    (eval-exp (class-body class) target-env k)
+                    (load-parents (cdr parents) target-env (class-env class) k)
+                )
+                (eval-exp (car parents) lookup-env k)
+            )
+        )
+    ))
     (
         (lambda (name parent body)
-            (new-var! name (make-class name parent body env) env)
+            (
+                (lambda (obj-env)
+                    (new-var! 'class name obj-env)
+                    (new-var! 'super parent obj-env)
+                    (eval-exp body obj-env k)
+                    (new-var! name (make-class name parent body obj-env) env)
+                )
+                ;[todo] can probably merge these two functions into one call
+                (load-parents (list-parents parent (list) env k) (new-frame env) env k)
+            )
         )
         (class-name exp)
         (class-name (class-extend exp))
@@ -573,28 +597,24 @@
 (define dot-right (lambda (dot) (index dot 2)))
 
 (define eval-dot (lambda (exp env k)
-    ;[todo] returns field/method the right-hand side referrs to
-    ;[todo] stores current class name in the environment if right-hand side is a method
     (display exp)
     (newline)
     (
         (lambda (class target)
             (
-                (lambda (parent class-env)
-                    (if (null? parent)
-                        'nop
-                        ;[todo] load the parent class(es) first
-                        'nop
-                    )
-                    (eval-exp (class-body class) class-env k)
-                    (eval-exp target class-env k)
+                (lambda (parent obj-env)
+                    (eval-exp (class-body class) obj-env k)
+                    (eval-exp target obj-env k)
                 )
                 (class-extend class)
                 (new-frame (class-env class))
             )
         )
-        ;[todo] check if left-hand side is super/this
-        (eval-exp (dot-left exp) env k)
+        ;[todo] check if left-hand side is super/this/==class/==parent
+        (cond
+            ((eq? 'super (dot-left exp)) (eval-exp (eval-exp 'super env k) env k))
+            (else (eval-exp (dot-left exp) env k))
+        )
         (dot-right exp)
     )
 ))
