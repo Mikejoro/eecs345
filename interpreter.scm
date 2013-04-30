@@ -28,6 +28,15 @@
     )
 ))
 
+; returns the nth element of the given list (zero-based)
+(define index (lambda (l n)
+    (cond
+        ((null? l) (list))
+        ((= 0 n) (car l))
+        (else (index (cdr l) (- n 1)))
+    )
+))
+
 ; ================================
 ; Entry Point
 
@@ -45,6 +54,9 @@
                 return
                 (lambda () (error "BREAK: Break called outside a loop!"))
                 (lambda () (error "CONTINUE: Continue called outside a loop!"))
+;                (lambda () (error "THROW: Throw called outside a try block!"))
+;                (lambda () (error "CATCH: ???"))
+;                (lambda () (error "FINALLY: ???"))
             )
         )
     ))
@@ -54,9 +66,9 @@
 ; Continuation
 
 (define make-k (lambda (return break continue) (list return break continue)))
-(define get-return (lambda (k) (car k)))
-(define get-break (lambda (k) (cadr k)))
-(define get-continue (lambda (k) (caddr k)))
+(define get-return (lambda (k) (index k 0)))
+(define get-break (lambda (k) (index k 1)))
+(define get-continue (lambda (k) (index k 2)))
 (define set-return (lambda (k return) (make-k return (get-break k) (get-continue k))))
 (define set-break (lambda (k break) (make-k (get-return k) break (get-continue k))))
 (define set-continue (lambda (k continue) (make-k (get-return k) (get-break k) continue)))
@@ -213,7 +225,7 @@
 
 (define make-prim (lambda (body) (list 'primitive body)))
 (define prim? (lambda (proc) (tagged-list? proc 'primitive)))
-(define prim-body (lambda (proc) (cadr proc)))
+(define prim-body (lambda (proc) (index proc 1)))
 
 (define prim-vars (lambda () (map car prim-procs)))
 (define prim-refs (lambda ()
@@ -232,6 +244,7 @@
         (lambda (env)
             (new-var! 'true #t env)
             (new-var! 'false #f env)
+            (new-var! 'class (list) env)
             env
         )
         (extend-env
@@ -272,6 +285,7 @@
 
 (define sequence? (lambda (exp)
     (and
+        (not (null? exp))
         (all? statement? exp)
         (not (null? (operands exp)))
     )
@@ -295,9 +309,9 @@
 
 (define make-proc (lambda (params body env) (list 'procedure params body env)))
 (define proc? (lambda (proc) (tagged-list? proc 'procedure)))
-(define proc-params (lambda (proc) (cadr proc)))
-(define proc-body (lambda (proc) (caddr proc)))
-(define proc-env (lambda (proc) (cadddr proc)))
+(define proc-params (lambda (proc) (index proc 1)))
+(define proc-body (lambda (proc) (index proc 2)))
+(define proc-env (lambda (proc) (index proc 3)))
 
 (define apply-proc (lambda (proc args k)
     (cond
@@ -332,12 +346,12 @@
         ((break? exp) (eval-break exp env k))
         ((continue? exp) (eval-continue exp env k))
         ((block? exp) (eval-block exp env k))
-        ((conditional? exp) (eval-conditional exp env k))
+        ((cond? exp) (eval-cond exp env k))
         ((while? exp) (eval-while exp env k))
         ((method-define? exp) (eval-method-define exp env k))
         ((method-define-static? exp) (eval-method-define-static exp env k))
         ((method-call? exp) (eval-method-call exp env k))
-        ((class-define? exp) (eval-class-define exp env k))
+        ((class-def? exp) (eval-class-def exp env k))
         ((dot? exp) (eval-dot exp env k))
         ((sequence? exp) (eval-seq exp env k))
         ((statement? exp) (eval-statement exp env k))
@@ -357,15 +371,15 @@
 ; ================================
 ; Variable Definition
 
-(define definition-var (lambda (exp) (cadr exp)))
-(define definition-val (lambda (exp)
-    (if (null? (cddr exp))
-        'nop
-        (caddr exp)
-    )
-))
-(define assignment-var (lambda (exp) (cadr exp)))
-(define assignment-val (lambda (exp) (caddr exp)))
+(define definition-var (lambda (exp) (index exp 1)))
+(define definition-val (lambda (exp) (index exp 2)))
+;    (if (null? (cddr exp))
+;        'nop
+;        (caddr exp)
+;    )
+;))
+(define assignment-var (lambda (exp) (index exp 1)))
+(define assignment-val (lambda (exp) (index exp 2)))
 
 (define eval-var-define (lambda (exp env k)
     (
@@ -379,6 +393,7 @@
 
 (define eval-var-define-static (lambda (exp env k)
     ;[todo]
+    (eval-var-define exp env k)
 ))
 
 (define eval-var-assign (lambda (exp env k)
@@ -395,7 +410,7 @@
 ; Return
 
 (define return? (lambda (exp) (tagged-list? exp 'return)))
-(define return-val (lambda (exp) (cadr exp)))
+(define return-val (lambda (exp) (index exp 1)))
 
 (define eval-return (lambda (exp env k)
     ((get-return k) (eval-exp (return-val exp) env k))
@@ -423,20 +438,20 @@
 ; ================================
 ; Conditional
 
-(define conditional? (lambda (exp) (tagged-list? exp 'if)))
-(define conditional-predicate (lambda (exp) (cadr exp)))
-(define conditional-consequent (lambda (exp) (caddr exp)))
-(define conditional-alternative (lambda (exp)
-    (if (null? (cdddr exp))
-        'nop
-        (cadddr exp)
-    )
-))
+(define cond? (lambda (exp) (tagged-list? exp 'if)))
+(define cond-predicate (lambda (exp) (index exp 1)))
+(define cond-consequent (lambda (exp) (index exp 2)))
+(define cond-alternative (lambda (exp) (index exp 3)))
+;    (if (null? (cdddr exp))
+;        'nop
+;        (cadddr exp)
+;    )
+;))
 
-(define eval-conditional (lambda (exp env k)
-    (if (true? (eval-exp (conditional-predicate exp) env k))
-        (eval-exp (conditional-consequent exp) (new-frame env) k)
-        (eval-exp (conditional-alternative exp) (new-frame env) k)
+(define eval-cond (lambda (exp env k)
+    (if (true? (eval-exp (cond-predicate exp) env k))
+        (eval-exp (cond-consequent exp) (new-frame env) k)
+        (eval-exp (cond-alternative exp) (new-frame env) k)
     )
 ))
 
@@ -444,8 +459,8 @@
 ; While Loop
 
 (define while? (lambda (exp) (tagged-list? exp 'while)))
-(define while-condition (lambda (exp) (cadr exp)))
-(define while-body (lambda (exp) (caddr exp)))
+(define while-condition (lambda (exp) (index exp 1)))
+(define while-body (lambda (exp) (index exp 2)))
 
 (define eval-while (lambda (exp env k)
     (define eval-while-inner (lambda (exp env k)
@@ -469,9 +484,9 @@
 
 (define method-define? (lambda (exp) (tagged-list? exp 'function)))
 (define method-define-static? (lambda (exp) (tagged-list? exp 'static-function)))
-(define method-name (lambda (exp) (cadr exp)))
-(define method-params (lambda (exp) (caddr exp)))
-(define method-body (lambda (exp) (cadddr exp)))
+(define method-name (lambda (exp) (index exp 1)))
+(define method-params (lambda (exp) (index exp 2)))
+(define method-body (lambda (exp) (index exp 3)))
 
 (define eval-method-define (lambda (exp env k)
     (new-var! (method-name exp)
@@ -485,6 +500,7 @@
 
 (define eval-method-define-static (lambda (exp env k)
     ;[todo]
+    (eval-method-define exp env k)
 ))
 
 ; ================================
@@ -494,39 +510,36 @@
 (define method-args (lambda (exp) (cddr exp)))
 
 (define eval-method-call (lambda (exp env k)
-    (define update-proc-env (lambda (var env proc)
-        (make-proc
-            (proc-params proc)
-            (proc-body proc)
-            (copy-vars! (list var) env (new-frame (proc-env proc)))
+    (define call-method (lambda (name proc args env k)
+        (if (= (length (proc-params proc)) (length args))
+            (apply-proc proc (eval-operands args env k) k)
+            (error
+                "CALL: Mismatched parameters and arguments:" name (proc-params proc)
+                'expected (length (proc-params proc)) 'got (length args)
+            )
         )
     ))
     (call/cc (lambda (return)
         (
-            (lambda (k name args)
-                (if (var-exist? name env)
-                    (
-                        (lambda (proc)
-                            (if (= (length (proc-params proc)) (length args))
-                                (apply-proc
-                                    (update-proc-env name env proc)
-                                    (eval-operands args env k)
-                                    k
-                                )
-                                (error
-                                    "CALL: Mismatched parameters and arguments:" name (proc-params proc)
-                                    'expected (length (proc-params proc)) 'got (length args)
-                                )
+            (lambda (name args env k)
+                (
+                    (lambda (name proc)
+                        (call-method name
+                            (make-proc
+                                (proc-params proc)
+                                (proc-body proc)
+                                (copy-vars! (list name) env (new-frame (proc-env proc)))
                             )
-                        )
-                        (get-var name env)
+                        args env k)
                     )
-                    (error "CALL: Unknown method:" name)
+                    (if (dot? name) (dot-right name) name)
+                    (eval-exp name env k)
                 )
             )
-            (set-return k return)
             (method-name exp)
             (method-args exp)
+            (new-frame env)
+            (set-return k return)
         )
     ))
 ))
@@ -534,14 +547,22 @@
 ; ================================
 ; Class Definition
 
-(define make-class (lambda (name extend body) (list 'class name extend body)))
-(define class-define? (lambda (exp) (tagged-list? exp 'class)))
-(define class-name (lambda (exp) (cadr exp)))
-(define class-extend (lambda (exp) (caddr exp)))
-(define class-body (lambda (exp) (cadddr exp)))
+(define make-class (lambda (name parent body env) (list 'class name parent body env)))
+(define class-def? (lambda (exp) (tagged-list? exp 'class)))
+(define class-name (lambda (exp) (index exp 1)))
+(define class-extend (lambda (exp) (index exp 2)))
+(define class-body (lambda (exp) (index exp 3)))
+(define class-env (lambda (exp) (index exp 4)))
 
-(define eval-class-define (lambda (exp env k)
-    ;[todo] dump static fields/methods into env named as dot expressions?
+(define eval-class-def (lambda (exp env k)
+    (
+        (lambda (name parent body)
+            (new-var! name (make-class name parent body env) env)
+        )
+        (class-name exp)
+        (class-name (class-extend exp))
+        (class-body exp)
+    )
 ))
 
 ; ================================
@@ -549,11 +570,34 @@
 
 (define make-dot (lambda (left right) (list 'dot left right)))
 (define dot? (lambda (dot) (tagged-list? dot 'dot)))
-(define dot-left (lambda (dot) (cadr dot)))
-(define dot-right (lambda (dot) (caddr dot)))
+(define dot-left (lambda (dot) (index dot 1)))
+(define dot-right (lambda (dot) (index dot 2)))
 
 (define eval-dot (lambda (exp env k)
-    ;[todo]
+    ;[todo] returns field/method the right-hand side referrs to
+    ;[todo] stores current class name in the environment if right-hand side is a method
+    (display exp)
+    (newline)
+    (
+        (lambda (class target)
+            (
+                (lambda (parent class-env)
+                    (if (null? parent)
+                        'nop
+                        ;[todo] load the parent class(es) first
+                        'nop
+                    )
+                    (eval-exp (class-body class) class-env k)
+                    (eval-exp target class-env k)
+                )
+                (class-extend class)
+                (new-frame (class-env class))
+            )
+        )
+        ;[todo] check if left-hand side is super/this
+        (eval-exp (dot-left exp) env k)
+        (dot-right exp)
+    )
 ))
 
 ; ================================
