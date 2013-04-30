@@ -545,46 +545,17 @@
 (define class-env (lambda (exp) (index exp 4)))
 
 (define eval-class-def (lambda (exp env k)
-    (define list-parents (lambda (parent l env k)
-        (if (null? parent)
-            l
-            (
-                (lambda (class l)
-                    (list-parents (class-extend class) l (class-env class) k)
-                )
-                (eval-exp parent env k)
-                (cons parent l)
-            )
-        )
-    ))
-    (define load-parents (lambda (parents target-env lookup-env k)
-        (if (null? parents)
-            target-env
-            (
-                (lambda (class)
-                    (eval-exp (class-body class) target-env k)
-                    (load-parents (cdr parents) target-env (class-env class) k)
-                )
-                (eval-exp (car parents) lookup-env k)
-            )
-        )
-    ))
     (
-        (lambda (name parent body)
-            (
-                (lambda (obj-env)
-                    (new-var! 'class name obj-env)
-                    (new-var! 'super parent obj-env)
-                    (eval-exp body obj-env k)
-                    (new-var! name (make-class name parent body obj-env) env)
-                )
-                ;[todo] can probably merge these two functions into one call
-                (load-parents (list-parents parent (list) env k) (new-frame env) env k)
-            )
+        (lambda (name parent body obj-env)
+            (new-var! 'class name obj-env)
+            (new-var! 'super parent obj-env)
+            (eval-exp body obj-env k)
+            (new-var! name (make-class name parent body obj-env) env)
         )
         (class-name exp)
         (class-name (class-extend exp))
         (class-body exp)
+        (new-frame env)
     )
 ))
 
@@ -600,21 +571,26 @@
     (display exp)
     (newline)
     (
-        (lambda (class target)
+        (lambda (left right)
             (
-                (lambda (parent obj-env)
-                    (eval-exp (class-body class) obj-env k)
-                    (eval-exp target obj-env k)
+                (lambda (class)
+                    ;[todo] search class-env for left-hand side, recurse to parent if not exist
+                    (
+                        (lambda (parent obj-env)
+                            (eval-exp right obj-env k)
+                        )
+                        (class-extend class)
+                        (class-env class)
+                    )
                 )
-                (class-extend class)
-                (new-frame (class-env class))
+                (cond
+                    ((eq? 'super left) (eval-exp (eval-exp left env k) env k))
+                    ((eq? 'this left) (error "DOT: Unimplemented:" left))
+                    (else (eval-exp left env k))
+                )
             )
         )
-        ;[todo] check if left-hand side is super/this/==class/==parent
-        (cond
-            ((eq? 'super (dot-left exp)) (eval-exp (eval-exp 'super env k) env k))
-            (else (eval-exp (dot-left exp) env k))
-        )
+        (dot-left exp)
         (dot-right exp)
     )
 ))
@@ -674,4 +650,4 @@
 
 (display (parser "test.txt"))
 (newline)
-(display (interpret "test.txt" "A"))
+(display (interpret "test.txt" "B"))
