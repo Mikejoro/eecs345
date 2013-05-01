@@ -283,7 +283,7 @@
     (and
         (not (null? exp))
         (all? statement? exp)
-        (not (null? (operands exp)))
+;        (not (null? (operands exp)))
     )
 ))
 (define last-exp? (lambda (seq) (null? (cdr seq))))
@@ -584,20 +584,22 @@
             (
                 (lambda (class)
                     (
-                        (lambda (parent obj-env)
-                            (if (var-exist? right obj-env)
-                                (eval-exp right obj-env k)
-                                (eval-dot (make-dot parent right) obj-env k)
+                        (lambda (name parent body env)
+                            (if (var-exist? right env)
+                                (eval-exp right env k)
+                                (eval-exp (make-dot 'super right) env k)
                             )
                         )
+                        (class-name class)
                         (class-extend class)
+                        (class-body class)
                         (class-env class)
                     )
                 )
                 (cond
                     ((null? left) (error "DOT: Reference not found:" right))
                     ((eq? 'super left) (eval-exp (eval-exp left env k) env k))
-                    ;[todo] how to handle instances?
+                    ;[todo] handle instances
                     ((eq? 'this left) (eval-exp (eval-exp 'class env k) env k))
                     (else (eval-exp left env k))
                 )
@@ -663,4 +665,4 @@
 
 (display (parser "test.txt"))
 (newline)
-(display (interpret "test.txt" "B"))
+(display (interpret "test.txt" "Square"))
