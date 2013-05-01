@@ -288,7 +288,6 @@
     (and
         (not (null? exp))
         (all? statement? exp)
-;        (not (null? (operands exp)))
     )
 ))
 (define last-exp? (lambda (seq) (null? (cdr seq))))
@@ -403,8 +402,10 @@
 ))
 
 (define eval-var-define-static (lambda (exp env k)
-    ;[todo]
-    (eval-var-define exp env k)
+    (if (var-exist? 'class env)
+        'nop
+        (eval-var-define exp env k)
+    )
 ))
 
 ; ================================
@@ -561,8 +562,10 @@
 ))
 
 (define eval-method-define-static (lambda (exp env k)
-    ;[todo]
-    (eval-method-define exp env k)
+    (if (var-exist? 'class env)
+        'nop
+        (eval-method-define exp env k)
+    )
 ))
 
 ; ================================
@@ -612,9 +615,9 @@
 (define eval-class-def (lambda (exp env k)
     (
         (lambda (name parent body obj-env)
-            (new-var! 'class name obj-env)
             (new-var! 'super parent obj-env)
             (eval-exp body obj-env k)
+            (new-var! 'class name obj-env)
             (new-var! name (make-class name parent body obj-env) env)
         )
         (class-name exp)
@@ -637,10 +640,19 @@
     (
         (lambda (left right)
             (
-                (lambda (env)
-                    (if (var-exist? right env)
-                        (eval-exp right env k)
-                        (eval-exp (make-dot 'super right) env k)
+                (lambda (obj)
+                    (
+                        (lambda (env)
+                            (if (var-exist? right env)
+                                (eval-exp right env k)
+                                (eval-exp (make-dot 'super right) env k)
+                            )
+                        )
+                        (cond
+                            ((new? obj) (new-env obj))
+                            ((class-def? obj) (class-env obj))
+                            (else obj)
+                        )
                     )
                 )
                 (cond
@@ -650,15 +662,14 @@
                             (lambda (super)
                                 (if (eq? 'nop super)
                                     (error "DOT: Reference not found:" right)
-                                    (class-env (eval-exp super env k))
+                                    (eval-exp super env k)
                                 )
                             )
                             (eval-exp left env k)
                         )
                     )
-                    ;[todo] handle instances
                     ((eq? 'this left) env)
-                    (else (class-env (eval-exp left env k)))
+                    (else (eval-exp left env k))
                 )
             )
         )
@@ -670,12 +681,30 @@
 ; ================================
 ; Instantiate Object
 
+(define make-new (lambda (env) (list 'new env)))
 (define new? (lambda (exp) (tagged-list? exp 'new)))
 (define new-class (lambda (exp) (index exp 1)))
+(define new-env (lambda (exp) (index exp 1)))
 
 (define eval-new (lambda (exp env k)
-    ;[todo]
-    'nop
+    (display exp) (newline)
+    (
+        (lambda (class obj-env)
+            (
+                (lambda (name parent body)
+                    (new-var! 'class name obj-env)
+                    (new-var! 'super parent obj-env)
+                    (eval-exp body obj-env k)
+                    (make-new obj-env)
+                )
+                (class-name class)
+                (class-extend class)
+                (class-body class)
+            )
+        )
+        (eval-exp (new-class exp) env k)
+        (new-frame env)
+    )
 ))
 
 ; ================================
