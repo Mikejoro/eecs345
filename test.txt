@@ -1,25 +1,13 @@
-class Rectangle {
-  static var width = 10;
-  static var height = 12;
-
-  static area() {
-    var a = width * height;
-    return a;
-  }
-
-  static setSize(x, y) {
-    width = x;
-    height = y;
+class B {
+  static var x = 2;
+  static set(a) {
+    x = a;
   }
 }
 
-class Square extends Rectangle {
-  static setSize(x) {
-    super.setSize(x, x);
-  }
-
+class A extends B {
   static main() {
-    setSize(20);
-    return area();
+    set(x + 1);
+    return B.x;
   }
 }

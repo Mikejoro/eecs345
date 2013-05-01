@@ -612,7 +612,3 @@
 ))
 
 ; ================================
-
-(display (parser "test.txt"))
-(newline)
-(display (interpret "test.txt" "A"))
