@@ -1,13 +1,25 @@
-class B {
-  static var x = 2;
-  static set(a) {
+class A {
+  var x = 6;
+  var y = 7;
+
+  prod() {
+    return this.x * this.y;
+  }
+
+  set2(a, b) {
     x = a;
+    y = b;
   }
 }
 
-class A extends B {
-  static main() {
-    set(x + 1);
-    return B.x;
+class B extends A {
+  set1(a) {
+    set2(a, a);
+  }
+
+  static main () {
+    var b = new B();
+    b.set1(10);
+    return b.prod();
   }
 }

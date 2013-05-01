@@ -3,7 +3,6 @@
 ; To run: (interpret "filename" "Class")
 ; Notes:
 ;     I'm using DrRacket with #lang set to R5RS.
-;     This should pass all tests except call-by-reference and method overloading.
 ; ================================
 
 ; throw an error
@@ -47,7 +46,6 @@
     (call/cc (lambda (return)
         (eval-exp
             (append (parser file) (list
-;               (list 'return (list 'funcall 'main))
                (list 'return (list 'funcall (list 'dot (string->symbol class) 'main)))
             ))
             the-global-env
@@ -55,9 +53,9 @@
                 return
                 (lambda () (error "BREAK: Break called outside a loop!"))
                 (lambda () (error "CONTINUE: Continue called outside a loop!"))
-;                (lambda () (error "THROW: Throw called outside a try block!"))
-;                (lambda () (error "CATCH: ???"))
-;                (lambda () (error "FINALLY: ???"))
+                (lambda () (error "THROW: Throw called outside a try block!"))
+                (lambda () (error "CATCH: Internal error."))
+                (lambda () (error "FINALLY: Internal error."))
             )
         )
     ))
@@ -66,13 +64,19 @@
 ; ================================
 ; Continuation
 
-(define make-k (lambda (return break continue) (list return break continue)))
+(define make-k (lambda (return break continue throw catch finally) (list return break continue throw catch finally)))
 (define get-return (lambda (k) (index k 0)))
 (define get-break (lambda (k) (index k 1)))
 (define get-continue (lambda (k) (index k 2)))
-(define set-return (lambda (k return) (make-k return (get-break k) (get-continue k))))
-(define set-break (lambda (k break) (make-k (get-return k) break (get-continue k))))
-(define set-continue (lambda (k continue) (make-k (get-return k) (get-break k) continue)))
+(define get-throw (lambda (k) (index k 3)))
+(define get-catch (lambda (k) (index k 4)))
+(define get-finally (lambda (k) (index k 5)))
+(define set-return (lambda (k return) (make-k return (get-break k) (get-continue k) (get-throw k) (get-catch k) (get-finally k))))
+(define set-break (lambda (k break) (make-k (get-return k) break (get-continue k) (get-throw k) (get-catch k) (get-finally k))))
+(define set-continue (lambda (k continue) (make-k (get-return k) (get-break k) continue (get-throw k) (get-catch k) (get-finally k))))
+(define set-throw (lambda (k return) (make-k (get-return k) (get-break k) (get-continue k) throw (get-catch k) (get-finally k))))
+(define set-catch (lambda (k return) (make-k (get-return k) (get-break k) (get-continue k) (get-throw k) catch (get-finally k))))
+(define set-finally (lambda (k return) (make-k (get-return k) (get-break k) (get-continue k) (get-throw k) (get-catch k) finally)))
 
 ; ================================
 ; Environment
@@ -339,9 +343,14 @@
         ((var-define? exp) (eval-var-define exp env k))
         ((var-define-static? exp) (eval-var-define-static exp env k))
         ((var-assign? exp) (eval-var-assign exp env k))
+        ((var-assign-static? exp) (eval-var-assign-static exp env k))
         ((return? exp) (eval-return exp env k))
         ((break? exp) (eval-break exp env k))
         ((continue? exp) (eval-continue exp env k))
+        ((throw? exp) (eval-throw exp env k))
+        ((try? exp) (eval-try exp env k))
+        ((catch? exp) (eval-catch exp env k))
+        ((finally? exp) (eval-finally exp env k))
         ((block? exp) (eval-block exp env k))
         ((cond? exp) (eval-cond exp env k))
         ((while? exp) (eval-while exp env k))
@@ -350,6 +359,7 @@
         ((method-call? exp) (eval-method-call exp env k))
         ((class-def? exp) (eval-class-def exp env k))
         ((dot? exp) (eval-dot exp env k))
+        ((new? exp) (eval-new exp env k))
         ((sequence? exp) (eval-seq exp env k))
         ((statement? exp) (eval-statement exp env k))
         (else (error "EVAL: Unknown expression:" exp))
@@ -366,7 +376,7 @@
 ))
 
 (define eval-get-var (lambda (name env k)
-    ;(display name) (newline)
+    (display name) (newline)
     (if (var-exist? name env)
         (get-var name env)
         (eval-dot (make-dot 'this name) env k)
@@ -401,6 +411,7 @@
 ; Variable Assignment
 
 (define var-assign? (lambda (exp) (tagged-list? exp '=)))
+(define var-assign-static? (lambda (exp) (tagged-list? exp 'static-=)))
 (define assignment-var (lambda (exp) (index exp 1)))
 (define assignment-val (lambda (exp) (index exp 2)))
 
@@ -412,6 +423,11 @@
         )
         (eval-exp (assignment-val exp) env k)
     )
+))
+
+(define eval-var-assign-static (lambda (exp env k)
+    ;[todo]
+    (eval-var-assign exp env k)
 ))
 
 ; ================================
@@ -435,6 +451,46 @@
 
 (define continue? (lambda (exp) (tagged-list? exp 'continue)))
 (define eval-continue (lambda (exp env k) ((get-continue k))))
+
+; ================================
+; Throw
+
+(define throw? (lambda (exp) (tagged-list? exp 'throw)))
+(define throw-val (lambda (exp) (index exp 1)))
+
+(define eval-throw (lambda (exp env k)
+    ((get-throw k) (eval-exp (throw-val exp) env k))
+))
+
+; ================================
+; Try-Catch-Finally
+
+(define try? (lambda (exp) (tagged-list? exp 'try)))
+(define try-body (lambda (exp) (index exp 1)))
+(define try-catch (lambda (exp) (index exp 2)))
+(define try-finally (lambda (exp) (index exp 3)))
+
+(define eval-try (lambda (exp env k)
+    ;[todo]
+    'nop
+))
+
+(define catch? (lambda (exp) (tagged-list? exp 'catch)))
+(define catch-param (lambda (exp) (index (index exp 1) 0)))
+(define catch-body (lambda (exp) (index exp 2)))
+
+(define eval-catch (lambda (exp env k)
+    ;[todo]
+    'nop
+))
+
+(define finally? (lambda (exp) (tagged-list? exp 'catch)))
+(define finally-body (lambda (exp) (index exp 1)))
+
+(define eval-finally (lambda (exp env k)
+    ;[todo]
+    'nop
+))
 
 ; ================================
 ; Block
@@ -577,7 +633,7 @@
 (define dot-right (lambda (dot) (index dot 2)))
 
 (define eval-dot (lambda (exp env k)
-    ;(display exp) (newline)
+    (display exp) (newline)
     (
         (lambda (left right)
             (
@@ -612,7 +668,18 @@
 ))
 
 ; ================================
+; Instantiate Object
+
+(define new? (lambda (exp) (tagged-list? exp 'new)))
+(define new-class (lambda (exp) (index exp 1)))
+
+(define eval-new (lambda (exp env k)
+    ;[todo]
+    'nop
+))
+
+; ================================
 
 (display (parser "test.txt"))
 (newline)
-(display (interpret "test.txt" "A"))
+(display (interpret "test.txt" "B"))
