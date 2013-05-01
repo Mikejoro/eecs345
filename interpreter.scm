@@ -53,8 +53,7 @@
                 return
                 (lambda () (error "BREAK: Break called outside a loop!"))
                 (lambda () (error "CONTINUE: Continue called outside a loop!"))
-                (lambda () (error "THROW: Throw called outside a try block!"))
-                (lambda () (error "CATCH: Internal error."))
+                (lambda (e) (error "THROW: Uncaught exception!"))
                 (lambda () (error "FINALLY: Internal error."))
             )
         )
@@ -64,19 +63,17 @@
 ; ================================
 ; Continuation
 
-(define make-k (lambda (return break continue throw catch finally) (list return break continue throw catch finally)))
+(define make-k (lambda (return break continue throw finally) (list return break continue throw finally)))
 (define get-return (lambda (k) (index k 0)))
 (define get-break (lambda (k) (index k 1)))
 (define get-continue (lambda (k) (index k 2)))
 (define get-throw (lambda (k) (index k 3)))
-(define get-catch (lambda (k) (index k 4)))
-(define get-finally (lambda (k) (index k 5)))
-(define set-return (lambda (k return) (make-k return (get-break k) (get-continue k) (get-throw k) (get-catch k) (get-finally k))))
-(define set-break (lambda (k break) (make-k (get-return k) break (get-continue k) (get-throw k) (get-catch k) (get-finally k))))
-(define set-continue (lambda (k continue) (make-k (get-return k) (get-break k) continue (get-throw k) (get-catch k) (get-finally k))))
-(define set-throw (lambda (k return) (make-k (get-return k) (get-break k) (get-continue k) throw (get-catch k) (get-finally k))))
-(define set-catch (lambda (k return) (make-k (get-return k) (get-break k) (get-continue k) (get-throw k) catch (get-finally k))))
-(define set-finally (lambda (k return) (make-k (get-return k) (get-break k) (get-continue k) (get-throw k) (get-catch k) finally)))
+(define get-finally (lambda (k) (index k 4)))
+(define set-return (lambda (k return) (make-k return (get-break k) (get-continue k) (get-throw k) (get-finally k))))
+(define set-break (lambda (k break) (make-k (get-return k) break (get-continue k) (get-throw k) (get-finally k))))
+(define set-continue (lambda (k continue) (make-k (get-return k) (get-break k) continue (get-throw k) (get-finally k))))
+(define set-throw (lambda (k throw) (make-k (get-return k) (get-break k) (get-continue k) throw (get-finally k))))
+(define set-finally (lambda (k finally) (make-k (get-return k) (get-break k) (get-continue k) (get-throw k) finally)))
 
 ; ================================
 ; Environment
@@ -348,7 +345,6 @@
         ((continue? exp) (eval-continue exp env k))
         ((throw? exp) (eval-throw exp env k))
         ((try? exp) (eval-try exp env k))
-        ((catch? exp) (eval-catch exp env k))
         ((finally? exp) (eval-finally exp env k))
         ((block? exp) (eval-block exp env k))
         ((cond? exp) (eval-cond exp env k))
@@ -472,25 +468,37 @@
 (define try-finally (lambda (exp) (index exp 3)))
 
 (define eval-try (lambda (exp env k)
-    ;[todo]
-    'nop
+    ;[todo] hijack return so finally always executes
+    (call/cc (lambda (finally)
+        (
+            (lambda (env k)
+                (
+                    (lambda (catch catch-arg)
+                        (new-var! (catch-param catch) catch-arg env)
+                        (eval-exp (catch-body catch) env k)
+                    )
+                    (try-catch exp)
+                    (call/cc (lambda (throw)
+                        (eval-exp (try-body exp) env (set-throw k throw))
+                    ))
+                )
+                (eval-exp (try-finally exp) env k)
+            )
+            (new-frame env)
+            (set-finally k finally)
+        )
+    ))
 ))
 
-(define catch? (lambda (exp) (tagged-list? exp 'catch)))
 (define catch-param (lambda (exp) (index (index exp 1) 0)))
 (define catch-body (lambda (exp) (index exp 2)))
 
-(define eval-catch (lambda (exp env k)
-    ;[todo]
-    'nop
-))
-
-(define finally? (lambda (exp) (tagged-list? exp 'catch)))
+(define finally? (lambda (exp) (tagged-list? exp 'finally)))
 (define finally-body (lambda (exp) (index exp 1)))
 
 (define eval-finally (lambda (exp env k)
-    ;[todo]
-    'nop
+    (eval-exp (finally-body exp) env k)
+    ((get-finally k))
 ))
 
 ; ================================
