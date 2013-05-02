@@ -3,6 +3,9 @@
 ; To run: (interpret "filename" "Class")
 ; Notes:
 ;     I'm using DrRacket with #lang set to R5RS.
+; Unimplemented:
+;     call-by-reference
+;     method overloading
 ; ================================
 
 ; throw an error
@@ -270,6 +273,7 @@
 (define eval-operands (lambda (ops env k)
     (map (lambda (exp) (eval-exp exp env k)) ops)
 ))
+
 (define eval-statement (lambda (exp env k)
     (apply-proc
         (eval-exp (operator exp) env k)
@@ -287,6 +291,7 @@
         (all? statement? exp)
     )
 ))
+
 (define last-exp? (lambda (seq) (null? (cdr seq))))
 (define first-exp (lambda (seq) (car seq)))
 (define rest-exps (lambda (seq) (cdr seq)))
@@ -371,7 +376,7 @@
 ))
 
 (define eval-get-var (lambda (name env k)
-    (display name) (newline)
+    ;(display name) (newline)
     (if (var-exist? name env)
         (get-var name env)
         (eval-dot (make-dot 'this name) env k)
@@ -398,10 +403,10 @@
 ))
 
 (define eval-var-define-static (lambda (exp env k)
-    (if (var-exist? 'class env)
-        'nop
+    ;(if (var-exist? 'class env)
+    ;    'nop
         (eval-var-define exp env k)
-    )
+    ;)
 ))
 
 ; ================================
@@ -413,24 +418,23 @@
 (define assignment-val (lambda (exp) (index exp 2)))
 
 (define eval-var-assign (lambda (exp env k)
-    ;[todo] check if left-hand side is a dot expression
     (
         (lambda (var val)
-            (
-                (lambda (val)
+            (if (dot? var)
+                (eval-dot-set var val env k)
+                (begin
                     (set-var! var val env)
                     val
                 )
-                (eval-exp val env k)
             )
         )
         (assignment-var exp)
-        (assignment-val exp)
+        (eval-exp (assignment-val exp) env k)
     )
 ))
 
 (define eval-var-assign-static (lambda (exp env k)
-    ;[todo]
+    ;[todo] not sure why this is part of the syntax for the assignment
     (eval-var-assign exp env k)
 ))
 
@@ -490,10 +494,16 @@
                                 (eval-exp (try-body exp) env (set-throw k throw))
                             ))
                         )
-                        (eval-exp (try-finally exp) env k)
+                        (if (null? (try-finally exp))
+                            'nop
+                            (eval-exp (try-finally exp) env k)
+                        )
                     )
                     (set-return k (lambda (arg)
-                        (eval-exp (try-finally exp) env k)
+                        (if (null? (try-finally exp))
+                            'nop
+                            (eval-exp (try-finally exp) env k)
+                        )
                         ((get-return k) arg)
                     ))
                 )
@@ -658,7 +668,7 @@
 (define dot-right (lambda (dot) (index dot 2)))
 
 (define eval-dot (lambda (exp env k)
-    (display exp) (newline)
+    ;(display exp) (newline)
     (
         (lambda (left right)
             (
@@ -700,6 +710,52 @@
     )
 ))
 
+(define eval-dot-set (lambda (dot val env k)
+    ;(display (list '= dot val)) (newline)
+    (
+        (lambda (left right)
+            (
+                (lambda (obj)
+                    (
+                        (lambda (env)
+                            (if (var-exist? right env)
+                                (begin
+                                    (set-var! right val env)
+                                    val
+                                )
+                                (eval-dot-set (make-dot 'super right) val env k)
+                            )
+                        )
+                        (cond
+                            ((new? obj) (new-env obj))
+                            ((class-def? obj) (class-env obj))
+                            (else obj)
+                        )
+                    )
+                )
+                (cond
+                    ((eq? 'nop left) (error "DOT: Reference not found:" right))
+                    ((eq? 'super left)
+                        (
+                            (lambda (super)
+                                (if (eq? 'nop super)
+                                    (error "DOT: Reference not found:" right)
+                                    (eval-exp super env k)
+                                )
+                            )
+                            (eval-exp left env k)
+                        )
+                    )
+                    ((eq? 'this left) env)
+                    (else (eval-exp left env k))
+                )
+            )
+        )
+        (dot-left dot)
+        (dot-right dot)
+    )
+))
+
 ; ================================
 ; Instantiate Object
 
@@ -709,7 +765,7 @@
 (define new-env (lambda (exp) (index exp 1)))
 
 (define eval-new (lambda (exp env k)
-    (display exp) (newline)
+    ;(display exp) (newline)
     (
         (lambda (class obj-env)
             (
@@ -730,7 +786,3 @@
 ))
 
 ; ================================
-
-(display (parser "test.txt"))
-(newline)
-(display (interpret "test.txt" "B"))

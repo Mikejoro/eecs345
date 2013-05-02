@@ -1,24 +1,11 @@
-class A {
-  var x;
-  error() {
-    throw 2;
-  }
+class C {
+  static var x = 1;
 }
 
 class B {
   static main () {
-    try {
-      var a = new A();
-      a.x = 1;
-      a.error();
-      a.x = 3;
-    }
-    catch (e) {
-      a.x = 2 * e;
-    }
-    finally {
-      a.x = 5;
-    }
-    return a.x;
+    C.x = 2;
+    var a = new C();
+    return a.x + C.x;
   }
 }
