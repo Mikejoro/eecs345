@@ -413,12 +413,19 @@
 (define assignment-val (lambda (exp) (index exp 2)))
 
 (define eval-var-assign (lambda (exp env k)
+    ;[todo] check if left-hand side is a dot expression
     (
-        (lambda (val)
-            (set-var! (assignment-var exp) val env)
-            val
+        (lambda (var val)
+            (
+                (lambda (val)
+                    (set-var! var val env)
+                    val
+                )
+                (eval-exp val env k)
+            )
         )
-        (eval-exp (assignment-val exp) env k)
+        (assignment-var exp)
+        (assignment-val exp)
     )
 ))
 
@@ -468,21 +475,28 @@
 (define try-finally (lambda (exp) (index exp 3)))
 
 (define eval-try (lambda (exp env k)
-    ;[todo] hijack return so finally always executes
     (call/cc (lambda (finally)
         (
             (lambda (env k)
                 (
-                    (lambda (catch catch-arg)
-                        (new-var! (catch-param catch) catch-arg env)
-                        (eval-exp (catch-body catch) env k)
+                    (lambda (k)
+                        (
+                            (lambda (catch catch-arg)
+                                (new-var! (catch-param catch) catch-arg env)
+                                (eval-exp (catch-body catch) env k)
+                            )
+                            (try-catch exp)
+                            (call/cc (lambda (throw)
+                                (eval-exp (try-body exp) env (set-throw k throw))
+                            ))
+                        )
+                        (eval-exp (try-finally exp) env k)
                     )
-                    (try-catch exp)
-                    (call/cc (lambda (throw)
-                        (eval-exp (try-body exp) env (set-throw k throw))
+                    (set-return k (lambda (arg)
+                        (eval-exp (try-finally exp) env k)
+                        ((get-return k) arg)
                     ))
                 )
-                (eval-exp (try-finally exp) env k)
             )
             (new-frame env)
             (set-finally k finally)

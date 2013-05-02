@@ -1,20 +1,24 @@
 class A {
-  static error() {
-    throw 4;
+  var x;
+  error() {
+    throw 2;
   }
 }
 
-class B extends A {
+class B {
   static main () {
     try {
-      error();
-      return 5;
+      var a = new A();
+      a.x = 1;
+      a.error();
+      a.x = 3;
     }
     catch (e) {
-      return e;
+      a.x = 2 * e;
     }
     finally {
-      return 3;
+      a.x = 5;
     }
+    return a.x;
   }
 }
